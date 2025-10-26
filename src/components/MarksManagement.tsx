@@ -47,17 +47,28 @@ const MarksManagement: React.FC<MarksManagementProps> = ({ userRole, userId, tea
     if (!teacherId) return;
 
     try {
+      const { data: teacherData, error: teacherError } = await supabase
+        .from('teachers')
+        .select('id')
+        .eq('teacher_id', teacherId)
+        .maybeSingle();
+
+      if (teacherError || !teacherData) {
+        console.error('Error finding teacher:', teacherError);
+        return;
+      }
+
       const { data, error } = await supabase
-        .from('teacher_assignments')
-        .select('class_id, subject_id')
-        .eq('teacher_id', teacherId);
+        .from('teacher_class_sections')
+        .select('class_section, subject')
+        .eq('teacher_id', teacherData.id);
 
       if (error) throw error;
 
       if (data) {
-        const classIds = [...new Set(data.map(d => d.class_id))];
-        const subjectIds = [...new Set(data.map(d => d.subject_id))];
-        setTeacherAssignments({ classIds, subjectIds });
+        const classSections = [...new Set(data.map(d => d.class_section))];
+        const subjects = [...new Set(data.map(d => d.subject))];
+        setTeacherAssignments({ classIds: classSections, subjectIds: subjects });
       }
     } catch (error: any) {
       console.error('Error loading teacher assignments:', error);
@@ -89,11 +100,11 @@ const MarksManagement: React.FC<MarksManagementProps> = ({ userRole, userId, tea
       }
 
       if (!data.class_id) {
+        const classSection = `${data.class_name}-${data.section}`;
         const { data: classData } = await supabase
           .from('classes')
           .select('id')
-          .eq('name', data.class_name)
-          .eq('section', data.section)
+          .eq('class_section', classSection)
           .maybeSingle();
 
         if (classData) {
@@ -105,7 +116,8 @@ const MarksManagement: React.FC<MarksManagementProps> = ({ userRole, userId, tea
         }
       }
 
-      if (userRole === 'teacher' && data.class_id && !teacherAssignments.classIds.includes(data.class_id)) {
+      const studentClassSection = `${data.class_name}-${data.section}`;
+      if (userRole === 'teacher' && teacherAssignments.classIds.length > 0 && !teacherAssignments.classIds.includes(studentClassSection)) {
         toast.error('You do not have permission to manage marks for this student');
         setStudent(null);
         setAvailableSubjects([]);
@@ -113,9 +125,9 @@ const MarksManagement: React.FC<MarksManagementProps> = ({ userRole, userId, tea
         return;
       }
 
-  setStudent(data);
-  await loadSubjectsForStudent(data);
-  await loadMarksForStudent(data.id, selectedExam, data.class_name);
+      setStudent(data);
+      await loadSubjectsForStudent(data);
+      await loadMarksForStudent(data.id, selectedExam, data.class_name);
 
     } catch (error: any) {
       toast.error(error.message || 'Error searching for student');
@@ -142,8 +154,8 @@ const MarksManagement: React.FC<MarksManagementProps> = ({ userRole, userId, tea
 
       let subjects = data || [];
 
-      if (userRole === 'teacher') {
-        subjects = subjects.filter(s => teacherAssignments.subjectIds.includes(s.id));
+      if (userRole === 'teacher' && teacherAssignments.subjectIds.length > 0) {
+        subjects = subjects.filter(s => teacherAssignments.subjectIds.includes(s.name));
       }
 
       setAvailableSubjects(subjects);

@@ -30,23 +30,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const refreshProfile = async () => {
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        setUserProfile(null);
-        return;
-      }
-      const profile = await getUserProfile(session.user.email!);
-      setUserProfile(profile);
-    } catch (error) {
-      console.error('Error loading profile:', error);
-      setUserProfile(null);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const logout = async () => {
     try {
       await supabase.auth.signOut();
@@ -57,54 +40,32 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  useEffect(() => {
-    refreshProfile();
+  const loadProfile = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_OUT') {
-        setUserProfile(null);
-      } else if (session) {
-        await refreshProfile();
-      }
-    });
-
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, []);
-
-  return (
-    <AuthContext.Provider 
-      value={{
-        userProfile,
-        loading,
-        isAdmin: isAdmin(userProfile),
-        isTeacher: isTeacher(userProfile),
-        refreshProfile,
-        logout
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
-  );
-
-  // End of component
-      
       if (!session) {
-        setUserProfile(null);
+        const loggedUser = localStorage.getItem('loggedUser');
+        if (loggedUser) {
+          try {
+            const user = JSON.parse(loggedUser);
+            setUserProfile(user);
+          } catch (e) {
+            console.error('Error parsing logged user:', e);
+            setUserProfile(null);
+          }
+        } else {
+          setUserProfile(null);
+        }
         setLoading(false);
         return;
       }
 
       const profile = await getUserProfile(session.user.email!);
-        if (!profile) {
-          // User no longer exists in the database
-          logout();
-        } else {
-          setUserProfile(profile);
-        }
+      if (!profile) {
+        logout();
       } else {
-        setUserProfile(null);
+        setUserProfile(profile);
       }
     } catch (error) {
       console.error('Error loading user profile:', error);
@@ -128,25 +89,29 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const event = e as CustomEvent<{ email: string; role: string }>;
       const loggedUserStr = localStorage.getItem('loggedUser');
       if (loggedUserStr) {
-        const loggedUser = JSON.parse(loggedUserStr);
-        if (loggedUser.email === event.detail?.email) {
-          logout();
+        try {
+          const loggedUser = JSON.parse(loggedUserStr);
+          if (loggedUser.email === event.detail?.email) {
+            logout();
+          }
+        } catch (e) {
+          console.error('Error parsing logged user on delete event:', e);
         }
       }
     };
 
     loadProfile();
     window.addEventListener('authChanged', handleAuthChange);
-    window.addEventListener('userDeleted', handleUserDeleted);
-    
+    window.addEventListener('userDeleted', handleUserDeleted as EventListener);
+
     return () => {
       window.removeEventListener('authChanged', handleAuthChange);
-      window.removeEventListener('userDeleted', handleUserDeleted);
+      window.removeEventListener('userDeleted', handleUserDeleted as EventListener);
     };
   }, []);
 
   return (
-    <AuthContext.Provider 
+    <AuthContext.Provider
       value={{
         userProfile,
         loading,
@@ -159,47 +124,4 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       {children}
     </AuthContext.Provider>
   );
-      if (loggedUser) {
-        const user = JSON.parse(loggedUser);
-        // If the deleted user is currently logged in, log them out
-        if (user.email === event.detail.email) {
-          logout();
-        }
-      }
-    };
-
-    window.addEventListener('authChanged', handleAuthChange);
-    window.addEventListener('userDeleted', handleUserDeleted as EventListener);
-    
-    return () => {
-      window.removeEventListener('authChanged', handleAuthChange);
-      window.removeEventListener('userDeleted', handleUserDeleted as EventListener);
-    };
-      if (loggedUser) {
-        const user = JSON.parse(loggedUser);
-        // If the deleted user is currently logged in, log them out
-        if (user.email === event.detail.email) {
-          logout();
-        }
-      }
-    };
-
-    window.addEventListener('authChanged', handleAuthChange);
-    window.addEventListener('userDeleted', handleUserDeleted as EventListener);
-    
-    return () => {
-      window.removeEventListener('authChanged', handleAuthChange);
-      window.removeEventListener('userDeleted', handleUserDeleted as EventListener);
-    };
-
-  const value: AuthContextType = {
-    userProfile,
-    loading,
-    isAdmin: isAdmin(userProfile),
-    isTeacher: isTeacher(userProfile),
-    refreshProfile,
-    logout
-  };
-
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

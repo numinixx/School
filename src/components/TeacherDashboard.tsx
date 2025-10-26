@@ -223,21 +223,12 @@ const TeacherDashboard: React.FC = () => {
     }
 
     try {
-      // Get authenticated teacher's ID
-      const { data: { user }, error: authError } = await supabase.auth.getUser();
-      if (authError) throw new Error('Authentication error: ' + authError.message);
-      if (!user) throw new Error('Not authenticated');
+      const teacherIdentifier = profile?.teacherId || teacher?.teacherId || profile?.teacher_id || teacher?.teacher_id || profile?.id || teacher?.id || '';
+      const teacherName = profile?.name || teacher?.name || 'Teacher';
 
-      // Get teacher from teachers table to verify active status and get name
-      const { data: teacherData, error: teacherError } = await supabase
-        .from('teachers')
-        .select('id, name, status')
-        .eq('id', user.id)
-        .maybeSingle();
-
-      if (teacherError) throw new Error('Teacher lookup error: ' + teacherError.message);
-      if (!teacherData) throw new Error('Teacher record not found');
-      if (teacherData.status !== 'active') throw new Error('Teacher account is not active');
+      if (!teacherIdentifier) {
+        throw new Error('Unable to identify teacher. Please log in again.');
+      }
 
       const hw = {
         title: title.trim(),
@@ -245,8 +236,8 @@ const TeacherDashboard: React.FC = () => {
         subject: subject || '',
         class_section: String(classSection).trim(),
         submission_date: submissionDate || null,
-        created_by: user.id,
-        teacher_name: teacherData.name || profile?.name || teacher?.name || 'Teacher',
+        created_by: String(teacherIdentifier),
+        teacher_name: teacherName,
         status: 'active'
       };
 
